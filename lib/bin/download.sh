@@ -29,6 +29,7 @@ __asdf_bin() {
   ## If output directory is not empty, mean it cached
   # shellcheck disable=SC2010
   if kc_asdf_present_dir "$outdir"; then
+    kc_asdf_debug "$ns" "found download cache at %s" "$outdir"
     if [ -n "${ASDF_FORCE_DOWNLOAD:-}" ]; then
       rm -fr "$outdir" && mkdir "$outdir"
     else
