@@ -181,50 +181,92 @@ kc_asdf_fetch() {
   fi
 }
 
-## Extract compress file
-## usage: `kc_asdf_extract /tmp/file.tar.gz /tmp/file`
+## Git clone with branch selection support
+## usage: `kc_asdf_git_clone '<git-repo>' '/tmp/repo' [main]`
+kc_asdf_git_clone() {
+  local repo="$1" location="$2" branch="${3:-}"
+  local args=(clone)
+
+  ## Make clone quiet
+  args+=(--quiet --config "advice.detachedHead=false")
+  ## Clone only single branch
+  args+=(--single-branch)
+  [ -n "$branch" ] &&
+    args+=(--branch "$branch")
+  args+=("$repo" "$location")
+
+  kc_asdf_exec git "${args[@]}"
+}
+
+## Extract compress file and move only internal path (if exist)
+## usage: `kc_asdf_extract /tmp/file.tar.gz /tmp/file [internal/path]`
 kc_asdf_extract() {
-  local input="$1" output="$2"
+  local input="$1" output="$2" internal="$3" tmppath
   local ext="${input##*.}"
 
+  if [ -n "$internal" ]; then
+    tmppath="$(kc_asdf_temp_dir)"
+  else
+    tmppath="$output"
+  fi
+
   if [[ "$ext" == "zip" ]]; then
-    kc_asdf_exec unzip -qo "$input" -d "$output"
+    kc_asdf_exec unzip -qo "$input" -d "$tmppath" ||
+      return 1
   else
     kc_asdf_exec tar -xzf \
       "$input" \
-      -C "$output" \
-      --strip-components "0"
+      -C "$tmppath" \
+      --strip-components "0" ||
+      return 1
+  fi
+
+  if [ -n "$internal" ]; then
+    kc_asdf_transfer "move" "$tmppath" "$output"
+    return $?
   fi
 }
 
-## Unpack package file
-## usage: `kc_asdf_unpack /tmp/file.pkg /tmp/file`
+## Unpack package file and move only internal path (if exist)
+## usage: `kc_asdf_unpack /tmp/file.pkg /tmp/file [internal/path]`
 kc_asdf_unpack() {
   local ns="unpack.defaults"
-  local input="$1" output="$2"
+  local input="$1" output="$2" internal="$3" tmppath
+  if [ -n "$internal" ]; then
+    tmppath="$(kc_asdf_temp_dir)"
+  else
+    tmppath="$output"
+  fi
 
   ! command -v pkgutil >/dev/null &&
     kc_asdf_error "$ns" "cannot package because 'pkgutil' is missing" &&
     return 1
 
-  kc_asdf_debug "$ns" "verifying package signature of %s" "$input"
-  local expected="signed by a developer certificate issued by Apple for distribution"
-  local signature actual
-  signature="$(kc_asdf_exec pkgutil --check-signature "$input")"
-  actual="$(echo "$signature" | grep -E '^\s+Status: ' | sed 's/[ ]*Status: //')"
-
-  if [[ "$expected" != "$actual" ]]; then
-    kc_asdf_error "$ns" "invalid pkg signature, please recheck (%s)" \
-      "$input"
-    echo "$signature" >&2
-    return 1
+  if [ -z "$ASDF_INSECURE" ]; then
+    kc_asdf_debug "$ns" "verifying package signature of %s" "$input"
+    local expected="signed by a developer certificate issued by Apple for distribution"
+    local signature actual
+    signature="$(kc_asdf_exec pkgutil --check-signature "$input")"
+    actual="$(echo "$signature" | grep -E '^\s+Status: ' | sed 's/[ ]*Status: //')"
+    if [[ "$expected" != "$actual" ]]; then
+      kc_asdf_error "$ns" "invalid pkg signature, please recheck (%s)" \
+        "$input"
+      echo "$signature" >&2
+      return 1
+    fi
   fi
 
-  [ -d "$output" ] &&
-    kc_asdf_debug "$ns" "delete output directory first" &&
-    rm -r "$output"
+  [ -d "$tmppath" ] &&
+    kc_asdf_debug "$ns" "delete tmppath directory first" &&
+    rm -r "$tmppath"
   kc_asdf_exec pkgutil --expand-full \
-    "$input" "$output"
+    "$input" "$tmppath" ||
+    return 1
+
+  if [ -n "$internal" ]; then
+    kc_asdf_transfer "move" "$tmppath" "$output"
+    return $?
+  fi
 }
 
 ## Transfer input to output based on input mode
@@ -261,7 +303,7 @@ kc_asdf_transfer() {
     dir="$(dirname "$output")"
     base="$(basename "$output")"
 
-    kc_asdf_debug "$ns" "we will create filename '%s' at %s" \
+    kc_asdf_debug "$ns" "create '%s' (filename) at %s (target)" \
       "$base" "$dir"
     if ! [ -d "$dir" ]; then
       kc_asdf_debug "$ns" "create missing directory (%s)" "$dir"
@@ -333,6 +375,22 @@ kc_asdf_require_commands() {
   done
 }
 
+## Check enabled feature
+## usage: `kc_asdf_enabled_feature '<feature>' && _exec_feature`
+kc_asdf_enabled_feature() {
+  local ns="feature.defaults"
+  local feature="$1"
+  if command -v _kc_asdf_custom_enabled_features >/dev/null; then
+    kc_asdf_debug "$ns" "developer custom feature '%s' status" "$feature"
+    if ! _kc_asdf_custom_enabled_features "$feature"; then
+      kc_asdf_debug "$ns" "feature '%s' has been disabled" "$feature"
+      return 1
+    fi
+  else
+    return 0
+  fi
+}
+
 ## Create temp file and return path
 ## usage: `kc_asdf_temp_file`
 kc_asdf_temp_file() {
@@ -343,4 +401,13 @@ kc_asdf_temp_file() {
 ## usage: `kc_asdf_temp_dir`
 kc_asdf_temp_dir() {
   mktemp -d
+}
+
+## Check if input is directory and contains some files
+## usage: `kc_asdf_present_dir /tmp`
+kc_asdf_present_dir() {
+  local directory="$1"
+  # shellcheck disable=SC2010
+  [ -d "$directory" ] &&
+    ls -A1q "$directory" | grep -q .
 }
