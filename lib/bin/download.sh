@@ -38,8 +38,11 @@ __asdf_bin() {
   fi
 
   if __kc_asdf_is_ref; then
-    kc_asdf_error "$ns" "reference mode is not support by current plugin"
-    return 1
+    url="https://github.com/git-chglog/git-chglog.git"
+    url="$(kc_asdf_template "$url" "${vars[@]}")"
+    command -v _kc_asdf_custom_source_url >/dev/null &&
+      kc_asdf_debug "$ns" "developer custom source link" &&
+      url="$(_kc_asdf_custom_source_url "$version" "$url")"
   elif __kc_asdf_is_ver; then
     url="https://github.com/git-chglog/git-chglog/releases/download/v{version}/git-chglog_{version}_{os}_{arch}.tar.gz"
     url="$(kc_asdf_template "$url" "${vars[@]}")"

@@ -24,8 +24,19 @@ __asdf_bin() {
   kc_asdf_debug "$ns" "install location is %s" "$outdir"
 
   if __kc_asdf_is_ref; then
-    kc_asdf_error "$ns" "reference mode is not support by current plugin"
-    return 1
+    if command -v _kc_asdf_custom_source_build >/dev/null; then
+      local tmp="$PWD"
+      cd "$indir" || return 1
+      kc_asdf_step "build" "$outdir" \
+        _kc_asdf_custom_source_build \
+        "$version" "$outdir" "$concurrency" ||
+        return 1
+      cd "$tmp" || return 1
+    else
+      kc_asdf_error "$ns" "%s missing, please create issue on repository" \
+        "_kc_asdf_custom_source_build()"
+      return 1
+    fi
   elif __kc_asdf_is_ver; then
     kc_asdf_step "install" "$outdir" \
       kc_asdf_transfer 'copy' "$indir" "$outdir" ||

@@ -36,8 +36,9 @@ plugin_author: Kamontat Chantrachirathumrong
 plugin_name: asdf-git-chglog
 plugin_org: kc-workspace
 plugin_repo: https://github.com/kc-workspace/asdf-git-chglog.git
-source_enabled: false
+source_enabled: true
 source_type: git
+source_url: https://github.com/git-chglog/git-chglog.git
 test_cmd_args: --version
 version_file_enabled: false
 version_prefix: v
