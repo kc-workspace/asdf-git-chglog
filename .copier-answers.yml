@@ -1,6 +1,6 @@
 ---
 ## Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: v1.3.3-57-gce18947
+_commit: v1.3.3-57-ga1c4438
 _src_path: /Users/kamontat/Desktop/Personal/asdf-plugin-template
 app_desc: changelog generator implemented in Golang.
 app_name: git-chglog

@@ -33,7 +33,9 @@ __asdf_bin() {
     if [ -n "${ASDF_FORCE_DOWNLOAD:-}" ]; then
       rm -fr "$outdir" && mkdir "$outdir"
     else
-      kc_asdf_info "$ns" "download result has been CACHED"
+      kc_asdf_info "$ns" \
+        "download result has been CACHED, use %s to force redownload" \
+        "\$ASDF_FORCE_DOWNLOAD"
       return 0
     fi
   fi
