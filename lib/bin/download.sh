@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 
-__kc_asdf_is_ref() {
-  [[ "${ASDF_INSTALL_TYPE:?}" == "ref" ]]
-}
-__kc_asdf_is_ver() {
-  [[ "${ASDF_INSTALL_TYPE:?}" == "version" ]]
-}
+kc_asdf_load_addon "download" "install" \
+  "fetch" \
+  "system" \
+  "checksum" \
+  "version" \
+  "git" \
+  "archive"
 
 ## variables:
 ##   - ASDF_INSECURE - disable checksum check
@@ -18,12 +19,22 @@ __asdf_bin() {
   local version="${ASDF_INSTALL_VERSION:?}"
   kc_asdf_debug "$ns" "downloading %s %s %s" \
     "$KC_ASDF_APP_NAME" "$type" "$version"
+  command -v _kc_asdf_custom_version >/dev/null &&
+    kc_asdf_debug "$ns" "developer defined custom version function" &&
+    version="$(_kc_asdf_custom_version "$version")"
 
   local outdir="${ASDF_DOWNLOAD_PATH:?}" outfile outpath
   local tmpdir tmpfile tmppath
   tmpdir="$(kc_asdf_temp_dir)"
-  local vars
-  vars=("os=$KC_ASDF_OS" "arch=$KC_ASDF_ARCH" "version=$version")
+  local vars=("version=$version")
+  [ -n "${KC_ASDF_OS:-}" ] && vars+=("os=${KC_ASDF_OS:-}")
+  [ -n "${KC_ASDF_ARCH:-}" ] && vars+=("arch=${KC_ASDF_ARCH:-}")
+  if command -v kc_asdf_version_parser >/dev/null; then
+    local major minor patch
+    read -r major minor patch <<<"$(kc_asdf_version_parser "$version")"
+    vars+=("major_version=$major" "minor_version=$minor" "patch_version=$patch")
+  fi
+  kc_asdf_debug "$ns" "template variables are '%s'" "${vars[*]}"
   local url mode
 
   ## If output directory is not empty, mean it cached
@@ -40,13 +51,13 @@ __asdf_bin() {
     fi
   fi
 
-  if __kc_asdf_is_ref; then
+  if kc_asdf_is_ref; then
     url="https://github.com/git-chglog/git-chglog.git"
     url="$(kc_asdf_template "$url" "${vars[@]}")"
     command -v _kc_asdf_custom_source_url >/dev/null &&
       kc_asdf_debug "$ns" "developer custom source link" &&
       url="$(_kc_asdf_custom_source_url "$version" "$url")"
-  elif __kc_asdf_is_ver; then
+  elif kc_asdf_is_ver; then
     url="https://github.com/git-chglog/git-chglog/releases/download/v{version}/git-chglog_{version}_{os}_{arch}.tar.gz"
     url="$(kc_asdf_template "$url" "${vars[@]}")"
     command -v _kc_asdf_custom_download_url >/dev/null &&
@@ -74,7 +85,6 @@ __asdf_bin() {
     kc_asdf_step "download" "$url" \
       kc_asdf_fetch_file "$url" "$tmppath" ||
       return 1
-
     if kc_asdf_enabled_feature checksum; then
       local checksum_url
       checksum_url="https://github.com/git-chglog/git-chglog/releases/download/v{version}/checksums.txt"
@@ -90,16 +100,16 @@ __asdf_bin() {
       kc_asdf_step "transfer" "$outpath" \
         kc_asdf_transfer "copy" "$tmppath" "$outpath" ||
         return 1
-      elif [[ "$mode" == "archive" ]]; then
+    elif [[ "$mode" == "archive" ]]; then
       local internal_path
       outpath="$outdir"
       internal_path=""
-      [ -n "$$internal_path" ] &&
+      [ -n "$internal_path" ] &&
         internal_path="$(kc_asdf_template "$internal_path" "${vars[@]}")"
       kc_asdf_debug "$ns" "extracting '%s' to '%s'" \
         "$tmppath" "$outpath"
       kc_asdf_step "extract" "$outpath" \
-        kc_asdf_extract "$tmppath" "$outpath" "$internal_path" ||
+        kc_asdf_archive_extract "$tmppath" "$outpath" "$internal_path" ||
         return 1
     else
       kc_asdf_error "$ns" "invalid download mode name '%s'" "$mode"
