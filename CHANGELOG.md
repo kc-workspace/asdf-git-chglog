@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/kc-workspace/asdf-git-chglog/compare/v1.0.0...v1.0.1) (2023-12-03)
+
+
+### Improvements
+
+* update plugin from template [autocommit] ([4642d0e](https://github.com/kc-workspace/asdf-git-chglog/commit/4642d0eca2f16b9e958dc0d8d7a166c22d91ea54))
+
 ## 1.0.0 (2023-11-06)
 
 
